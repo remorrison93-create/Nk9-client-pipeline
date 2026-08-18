@@ -8,30 +8,34 @@
 </head>
 <body>
 <header class="topbar">
-  <div class="topbar-left">
-    <h1>🐾 Nitro K-9 Pipeline Tracker</h1>
-  </div>
-  <nav class="tabs" id="main-nav">
-    <a href="#board" data-view="board">Board</a>
-    <a href="#needs-action" data-view="needs-action">Needs Action Today <span id="needs-action-count" class="count-badge" hidden>0</span></a>
-    <a href="#not_a_fit" data-view="not_a_fit">Not a Fit</a>
-    <a href="#alumni" data-view="alumni">Alumni</a>
-  </nav>
-  <div class="topbar-right">
-    <a href="#intake" class="btn btn-primary">+ New Lead</a>
-    <div class="menu" id="tools-menu">
-      <button type="button" id="tools-menu-btn" class="btn btn-ghost" aria-haspopup="true" aria-expanded="false">Tools ▾</button>
-      <div class="menu-dropdown" id="tools-menu-dropdown" hidden>
-        <button type="button" id="export-full-btn">Export full CSV</button>
-        <button type="button" id="export-onboarding-btn">Export onboarding to-do CSV</button>
-        <button type="button" id="import-btn">Import CSV…</button>
-        <input type="file" id="import-file-input" accept=".csv,text/csv" hidden />
-        <hr />
-        <button type="button" id="load-sample-btn">Load sample data</button>
-        <button type="button" id="clear-data-btn" class="danger">Clear all data…</button>
+  <div class="topbar-row">
+    <a href="#dashboard" class="brand">
+      <span class="brand-mark">N9</span>
+      <span class="brand-name">Nitro K&#8209;9 <span class="brand-sub">Pipeline</span></span>
+    </a>
+    <div class="topbar-actions">
+      <a href="#intake" class="btn btn-primary btn-sm">+ New Lead</a>
+      <div class="menu" id="tools-menu">
+        <button type="button" id="tools-menu-btn" class="btn btn-ghost btn-sm" aria-haspopup="true" aria-expanded="false">Tools</button>
+        <div class="menu-dropdown" id="tools-menu-dropdown" hidden>
+          <button type="button" id="export-full-btn">Export full CSV</button>
+          <button type="button" id="export-onboarding-btn">Export onboarding to-do CSV</button>
+          <button type="button" id="import-btn">Import CSV…</button>
+          <input type="file" id="import-file-input" accept=".csv,text/csv" hidden />
+          <hr />
+          <button type="button" id="load-sample-btn">Load sample data</button>
+          <button type="button" id="clear-data-btn" class="danger">Clear all data…</button>
+        </div>
       </div>
     </div>
   </div>
+  <nav class="tabs" id="main-nav">
+    <a href="#dashboard" data-view="dashboard">Dashboard</a>
+    <a href="#board" data-view="board">Board</a>
+    <a href="#needs-action" data-view="needs-action">To&#8209;Do <span id="needs-action-count" class="count-badge" hidden>0</span></a>
+    <a href="#not_a_fit" data-view="not_a_fit">Not a Fit</a>
+    <a href="#alumni" data-view="alumni">Alumni</a>
+  </nav>
 </header>
 
 <main id="main-view"></main>
