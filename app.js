@@ -450,19 +450,76 @@ function allNeedsActionItems() {
 }
 
 /* ---------------------------------------------------------------------- */
+/* Monthly stats (Dashboard)                                             */
+/* ---------------------------------------------------------------------- */
+
+function monthBounds(d) {
+  d = d || new Date();
+  return {
+    start: new Date(d.getFullYear(), d.getMonth(), 1),
+    end: new Date(d.getFullYear(), d.getMonth() + 1, 1),
+  };
+}
+
+function isTimestampInCurrentMonth(iso) {
+  if (!iso) return false;
+  var d = new Date(iso);
+  var b = monthBounds();
+  return d >= b.start && d < b.end;
+}
+
+function isDateStrInCurrentMonth(dateStr) {
+  if (!dateStr) return false;
+  var d = parseLocalDate(dateStr);
+  var b = monthBounds();
+  return d >= b.start && d < b.end;
+}
+
+// A client is only ever marked "Sold" once (after that they move on through
+// onboarding/active/program review); scanning the activity log for that
+// single event gives an exact conversion date without a schema change.
+function getSoldActivity(client) {
+  for (var i = 0; i < client.activityLog.length; i++) {
+    if (client.activityLog[i].action.indexOf("Assessment outcome: Sold") === 0) {
+      return client.activityLog[i];
+    }
+  }
+  return null;
+}
+
+function computeMonthlyStats() {
+  var signups = state.clients.filter(function (c) { return isTimestampInCurrentMonth(c.createdAt); }).length;
+
+  var assessedCount = state.clients.filter(function (c) { return isDateStrInCurrentMonth(c.assessmentDate); }).length;
+
+  var conversions = [];
+  state.clients.forEach(function (c) {
+    var soldEvent = getSoldActivity(c);
+    if (soldEvent && isTimestampInCurrentMonth(soldEvent.timestamp)) {
+      conversions.push({ client: c, soldAt: soldEvent.timestamp });
+    }
+  });
+  conversions.sort(function (a, b) { return a.soldAt < b.soldAt ? 1 : -1; });
+
+  var conversionRate = assessedCount ? Math.round((conversions.length / assessedCount) * 100) : null;
+
+  return { signups: signups, assessedCount: assessedCount, conversions: conversions, conversionRate: conversionRate };
+}
+
+/* ---------------------------------------------------------------------- */
 /* Routing                                                                */
 /* ---------------------------------------------------------------------- */
 
-var VALID_VIEWS = ["board", "needs-action", "not_a_fit", "alumni", "intake"];
+var VALID_VIEWS = ["dashboard", "board", "needs-action", "not_a_fit", "alumni", "intake"];
 
 function route() {
-  var hash = location.hash.replace(/^#/, "") || "board";
+  var hash = location.hash.replace(/^#/, "") || "dashboard";
   var qIdx = hash.indexOf("?");
   var view = qIdx === -1 ? hash : hash.slice(0, qIdx);
   var query = qIdx === -1 ? "" : hash.slice(qIdx + 1);
   var params = new URLSearchParams(query);
 
-  state.ui.view = VALID_VIEWS.indexOf(view) !== -1 ? view : "board";
+  state.ui.view = VALID_VIEWS.indexOf(view) !== -1 ? view : "dashboard";
   state.ui.profileClientId = params.get("client") || null;
   render();
 }
@@ -487,6 +544,7 @@ function render() {
   renderNav();
   var main = document.getElementById("main-view");
   switch (state.ui.view) {
+    case "dashboard": main.innerHTML = renderDashboardView(); break;
     case "board": main.innerHTML = renderBoardView(); break;
     case "needs-action": main.innerHTML = renderNeedsActionView(); break;
     case "not_a_fit": main.innerHTML = renderArchiveView("not_a_fit"); break;
@@ -509,15 +567,79 @@ function renderNav() {
 }
 
 /* ---------------------------------------------------------------------- */
+/* Rendering: dashboard                                                  */
+/* ---------------------------------------------------------------------- */
+
+function statTile(label, value, sub) {
+  return (
+    '<div class="stat-tile">' +
+      '<div class="stat-value">' + escapeHtml(value) + "</div>" +
+      '<div class="stat-label">' + escapeHtml(label) + "</div>" +
+      '<div class="stat-sub">' + escapeHtml(sub) + "</div>" +
+    "</div>"
+  );
+}
+
+function renderDashboardView() {
+  var stats = computeMonthlyStats();
+  var allNa = allNeedsActionItems();
+  var todoPreview = allNa.slice(0, 6);
+
+  var statsHtml =
+    '<div class="stat-grid">' +
+      statTile("Sign-ups", stats.signups, "New leads this month") +
+      statTile("Assessments", stats.assessedCount, "Assessments this month") +
+      statTile("Conversions", stats.conversions.length, "Sold after assessment") +
+      statTile("Conversion Rate", stats.conversionRate === null ? "—" : stats.conversionRate + "%", "Conversions ÷ assessments") +
+    "</div>";
+
+  var todoHtml =
+    '<div class="dash-section">' +
+      '<div class="dash-section-header"><h2>To-Do</h2>' +
+        '<a href="#needs-action" class="link-more">View all (' + allNa.length + ")</a></div>" +
+      (todoPreview.length
+        ? '<div class="needs-action-list">' + todoPreview.map(renderNeedsActionRow).join("") + "</div>"
+        : '<div class="empty-inline">Nothing needs action right now.</div>') +
+    "</div>";
+
+  var conversionRows = stats.conversions.map(function (item) {
+    var c = item.client;
+    return (
+      '<tr data-client-id="' + c.id + '">' +
+        "<td>" + escapeHtml(c.name) + "</td>" +
+        "<td>" + escapeHtml(c.dogName || "—") + "</td>" +
+        "<td>" + escapeHtml(c.currentProgram || "—") + "</td>" +
+        "<td>" + escapeHtml(c.owner || "—") + "</td>" +
+        "<td>" + (c.assessmentDate ? fmtDateReadable(c.assessmentDate) : "—") + "</td>" +
+        "<td>" + fmtTimestampReadable(item.soldAt) + "</td>" +
+      "</tr>"
+    );
+  }).join("");
+
+  var conversionsHtml =
+    '<div class="dash-section">' +
+      '<div class="dash-section-header"><h2>This Month&#8217;s Conversions</h2></div>' +
+      (stats.conversions.length
+        ? '<div class="table-scroll"><table class="archive-table">' +
+            "<thead><tr><th>Name</th><th>Dog</th><th>Package</th><th>Owner</th><th>Assessment</th><th>Sold On</th></tr></thead>" +
+            "<tbody>" + conversionRows + "</tbody>" +
+          "</table></div>"
+        : '<div class="empty-inline">No conversions recorded yet this month.</div>') +
+    "</div>";
+
+  return '<div class="dashboard">' + statsHtml + todoHtml + conversionsHtml + "</div>";
+}
+
+/* ---------------------------------------------------------------------- */
 /* Rendering: board                                                      */
 /* ---------------------------------------------------------------------- */
 
 function cardMetaPills(client) {
   var pills = [];
   if (client.owner) {
-    pills.push('<span class="pill pill-owner">👤 ' + escapeHtml(client.owner) + '</span>');
+    pills.push('<span class="pill pill-owner">' + escapeHtml(client.owner) + '</span>');
   } else if (EARLY_STAGES.indexOf(client.stage) !== -1) {
-    pills.push('<span class="pill pill-unowned">⚑ Unowned</span>');
+    pills.push('<span class="pill pill-unowned">Unowned</span>');
   }
 
   var days = Math.floor((Date.now() - new Date(client.stageEnteredAt)) / 86400000);
@@ -546,7 +668,7 @@ function renderCard(client) {
   return (
     '<div class="card ' + flagClass + '" data-client-id="' + client.id + '" role="button" tabindex="0">' +
       '<div class="card-title">' + escapeHtml(client.name || "(no name)") + "</div>" +
-      '<div class="card-dog">' + (client.dogName ? "🐕 " + escapeHtml(client.dogName) : "") + "</div>" +
+      '<div class="card-dog">' + (client.dogName ? "Dog: " + escapeHtml(client.dogName) : "") + "</div>" +
       '<div class="card-meta">' + cardMetaPills(client) + "</div>" +
     "</div>"
   );
@@ -567,12 +689,13 @@ function renderBoardView() {
     var clients = state.clients.filter(function (c) { return getDisplayStage(c) === stage.key; });
     var cardsHtml = clients.length
       ? clients.map(renderCard).join("")
-      : '<div class="empty-col">No clients</div>';
+      : '<div class="empty-col">No clients in this stage</div>';
     return (
-      '<div class="column">' +
-        '<div class="column-header"><span>' + stage.label + "</span><span>" + clients.length + "</span></div>" +
+      '<details class="column" open>' +
+        '<summary class="column-header"><span class="ch-left"><span class="chevron"></span>' + stage.label + "</span>" +
+          '<span class="column-count">' + clients.length + "</span></summary>" +
         '<div class="column-cards">' + cardsHtml + "</div>" +
-      "</div>"
+      "</details>"
     );
   }).join("");
 
@@ -583,28 +706,29 @@ function renderBoardView() {
 /* Rendering: Needs Action                                               */
 /* ---------------------------------------------------------------------- */
 
+function renderNeedsActionRow(item) {
+  var client = getClient(item.clientId);
+  if (!client) return "";
+  var cls = item.overdue ? "" : "due-today";
+  return (
+    '<div class="na-item ' + cls + '" data-client-id="' + client.id + '">' +
+      '<div class="na-main">' +
+        '<div class="na-name">' + escapeHtml(client.name) + (client.dogName ? " — " + escapeHtml(client.dogName) : "") + "</div>" +
+        '<div class="na-reason">' + escapeHtml(item.reason) + " · " + STAGE_LABELS[client.stage] + "</div>" +
+      "</div>" +
+      '<div class="na-due" style="color:' + (item.overdue ? "var(--danger)" : "var(--warn)") + '">' +
+        (item.overdue ? "Overdue" : "Due today") + " · " + fmtDateReadable(item.dueDate) +
+      "</div>" +
+    "</div>"
+  );
+}
+
 function renderNeedsActionView() {
   var items = allNeedsActionItems();
   if (!items.length) {
-    return '<div class="empty-state"><h2>Nothing needs action right now 🎉</h2><p>Check back later, or browse the board.</p></div>';
+    return '<div class="empty-state"><h2>Nothing needs action right now</h2><p>Check back later, or browse the board.</p></div>';
   }
-  var rows = items.map(function (item) {
-    var client = getClient(item.clientId);
-    if (!client) return "";
-    var cls = item.overdue ? "" : "due-today";
-    return (
-      '<div class="na-item ' + cls + '" data-client-id="' + client.id + '">' +
-        '<div class="na-main">' +
-          '<div class="na-name">' + escapeHtml(client.name) + (client.dogName ? " — 🐕 " + escapeHtml(client.dogName) : "") + "</div>" +
-          '<div class="na-reason">' + escapeHtml(item.reason) + " · " + STAGE_LABELS[client.stage] + "</div>" +
-        "</div>" +
-        '<div class="na-due" style="color:' + (item.overdue ? "var(--danger)" : "var(--warn)") + '">' +
-          (item.overdue ? "Overdue" : "Due today") + " · " + fmtDateReadable(item.dueDate) +
-        "</div>" +
-      "</div>"
-    );
-  }).join("");
-  return '<div class="needs-action-list">' + rows + "</div>";
+  return '<div class="needs-action-list">' + items.map(renderNeedsActionRow).join("") + "</div>";
 }
 
 /* ---------------------------------------------------------------------- */
@@ -638,10 +762,10 @@ function renderArchiveView(stageKey) {
 
   return (
     searchHtml +
-    '<table class="archive-table" id="archive-table">' +
+    '<div class="table-scroll"><table class="archive-table" id="archive-table">' +
       "<thead><tr><th>Name</th><th>Dog</th><th>Last Owner</th><th>Last Updated</th><th></th></tr></thead>" +
       "<tbody>" + rows + "</tbody>" +
-    "</table>"
+    "</table></div>"
   );
 }
 
@@ -711,16 +835,16 @@ function renderStageActions(client) {
     html += '<input type="date" id="assessment-date-input" value="' + (client.assessmentDate || "") + '" />';
     html += '<button type="button" class="btn" id="schedule-assessment-btn">Update Date</button>';
     if (isDecisionTime) {
-      html += '<button type="button" class="btn btn-primary" data-outcome="sold" id="outcome-sold-btn">✅ Sold</button>';
-      html += '<button type="button" class="btn" data-outcome="unsure" id="outcome-unsure-btn">🤔 Unsure</button>';
-      html += '<button type="button" class="btn btn-danger" data-outcome="not_a_fit" id="outcome-notfit-btn">✕ Not a Fit</button>';
+      html += '<button type="button" class="btn btn-primary" data-outcome="sold" id="outcome-sold-btn">Sold</button>';
+      html += '<button type="button" class="btn" data-outcome="unsure" id="outcome-unsure-btn">Unsure</button>';
+      html += '<button type="button" class="btn btn-danger" data-outcome="not_a_fit" id="outcome-notfit-btn">Not a Fit</button>';
     }
   } else if (client.stage === "assessment_outcome") {
     html += '<div class="hint">Marked <strong>Unsure</strong> on ' + fmtTimestampReadable(client.unsureSetAt) +
       ". Re-evaluate below.</div>";
-    html += '<button type="button" class="btn btn-primary" data-outcome="sold" id="outcome-sold-btn">✅ Sold</button>';
-    html += '<button type="button" class="btn" data-outcome="unsure" id="outcome-unsure-btn">🤔 Still Unsure (reset timer)</button>';
-    html += '<button type="button" class="btn btn-danger" data-outcome="not_a_fit" id="outcome-notfit-btn">✕ Not a Fit</button>';
+    html += '<button type="button" class="btn btn-primary" data-outcome="sold" id="outcome-sold-btn">Sold</button>';
+    html += '<button type="button" class="btn" data-outcome="unsure" id="outcome-unsure-btn">Still Unsure (reset timer)</button>';
+    html += '<button type="button" class="btn btn-danger" data-outcome="not_a_fit" id="outcome-notfit-btn">Not a Fit</button>';
   } else if (client.stage === "onboarding") {
     html += '<div class="hint">Complete the onboarding checklist below. The client auto-advances to Active once the training schedule is built.</div>';
     html += '<select id="owner-select"><option value="">— Assign owner —</option>' + ownerOptions + "</select>";
@@ -730,13 +854,13 @@ function renderStageActions(client) {
     html += '<button type="button" class="btn btn-primary" id="move-review-btn">Move to Program Review</button>';
   } else if (client.stage === "program_review") {
     html += '<div class="hint">Package complete. Did the client graduate, or continue training?</div>';
-    html += '<button type="button" class="btn btn-primary" data-review="graduated" id="review-graduated-btn">🎓 Graduated</button>';
-    html += '<button type="button" class="btn" data-review="continue" id="review-continue-btn">🔁 Continue Training</button>';
+    html += '<button type="button" class="btn btn-primary" data-review="graduated" id="review-graduated-btn">Graduated</button>';
+    html += '<button type="button" class="btn" data-review="continue" id="review-continue-btn">Continue Training</button>';
   } else if (client.stage === "not_a_fit") {
     html += '<div class="hint">Archived — Not a Fit. No further actions.</div>';
   } else if (client.stage === "alumni") {
     html += '<div class="hint">Graduated alumni. Reactivate if they return for more training.</div>';
-    html += '<button type="button" class="btn btn-primary" id="reactivate-btn">Reactivate → Onboarding</button>';
+    html += '<button type="button" class="btn btn-primary" id="reactivate-btn">Reactivate to Onboarding</button>';
   }
 
   html += "</div>";
@@ -820,7 +944,7 @@ function renderProfileModal(client) {
           "<div>" +
             "<h2>" + escapeHtml(client.name || "(no name)") + "</h2>" +
             '<div class="sub">' + STAGE_LABELS[client.stage] + " · " + days + " day" + (days === 1 ? "" : "s") + " in stage · " +
-              (client.owner ? "Owner: " + escapeHtml(client.owner) : '<span class="flag-icon">⚑ Unowned</span>') +
+              (client.owner ? "Owner: " + escapeHtml(client.owner) : '<span class="flag-text">Unowned</span>') +
             "</div>" +
           "</div>" +
           '<button type="button" class="modal-close" id="modal-close-btn">×</button>' +
@@ -1156,6 +1280,15 @@ function importCsvText(text) {
 /* Sample data / reset                                                   */
 /* ---------------------------------------------------------------------- */
 
+// Sample clients are seeded with a "sold" assessment weeks/months in the
+// past, but setAssessmentOutcome always timestamps that event as "now" —
+// backdate it to match, so the demo's monthly stats look realistic instead
+// of showing every seeded sale as a conversion from this month.
+function backdateSoldEvent(client, dateStr) {
+  var ev = getSoldActivity(client);
+  if (ev) ev.timestamp = dateStr + "T10:00:00.000Z";
+}
+
 function loadSampleData() {
   if (state.clients.length && !confirm("Add sample clients to your existing board?")) return;
 
@@ -1192,6 +1325,7 @@ function loadSampleData() {
   markContacted(c6, "Steve");
   scheduleAssessment(c6, addDays(todayStr(), -21), "Steve");
   setAssessmentOutcome(c6, "sold", "Steve");
+  backdateSoldEvent(c6, addDays(todayStr(), -20));
   ["contractSent", "contractSigned", "invoiceSent", "availabilityCollected"].forEach(function (k) {
     toggleChecklistItem(c6, k, true, "Steve");
   });
@@ -1201,6 +1335,7 @@ function loadSampleData() {
   markContacted(c7, "North");
   scheduleAssessment(c7, addDays(todayStr(), -30), "North");
   setAssessmentOutcome(c7, "sold", "North");
+  backdateSoldEvent(c7, addDays(todayStr(), -29));
   CHECKLIST_ITEMS.forEach(function (item) { toggleChecklistItem(c7, item.key, true, "North"); });
   addNote(c7, "Loves tug-of-war reward drills.", "North");
   samples.push(c7);
@@ -1209,6 +1344,7 @@ function loadSampleData() {
   markContacted(c8, "Steve");
   scheduleAssessment(c8, addDays(todayStr(), -90), "Steve");
   setAssessmentOutcome(c8, "sold", "Steve");
+  backdateSoldEvent(c8, addDays(todayStr(), -89));
   CHECKLIST_ITEMS.forEach(function (item) { toggleChecklistItem(c8, item.key, true, "Steve"); });
   moveToProgramReview(c8, "Steve");
   samples.push(c8);
@@ -1217,6 +1353,7 @@ function loadSampleData() {
   markContacted(c9, "North");
   scheduleAssessment(c9, addDays(todayStr(), -120), "North");
   setAssessmentOutcome(c9, "sold", "North");
+  backdateSoldEvent(c9, addDays(todayStr(), -119));
   CHECKLIST_ITEMS.forEach(function (item) { toggleChecklistItem(c9, item.key, true, "North"); });
   moveToProgramReview(c9, "North");
   setProgramReviewOutcome(c9, "graduated", "North");
