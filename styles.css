@@ -1,21 +1,22 @@
 /* ------------------------------------------------------------------------
    Nitro K-9 brand tokens
-   Placeholder brand palette — swap these for exact brand hex codes / a
-   logo mark once available. Everything in this file reads from these
-   variables, so a rebrand is a one-block edit.
+   Everything in this file reads from these variables, so any further
+   rebrand is a one-block edit.
    ---------------------------------------------------------------------- */
 :root {
-  --ink: #15171c;            /* brand dark — header/nav/primary buttons */
-  --ink-hover: #23262e;
-  --accent: #ff7a1a;         /* nitro amber — badges, highlights, focus */
-  --accent-dark: #c1500d;    /* AA-safe darker amber for text/links */
-  --accent-soft: #fff1e6;    /* amber tint for subtle backgrounds */
+  --ink: #1e1e1e;             /* brand dark charcoal — header/nav/primary buttons */
+  --ink-hover: #2c2c2c;
+  --accent: #f1592a;          /* brand accent orange — badges, highlights, focus */
+  --accent-dark: #a93e1d;     /* AA-safe darker orange for text/links */
+  --accent-soft: #fdeae3;     /* orange tint for subtle backgrounds */
+  --secondary: #e5e5e5;       /* brand secondary light gray — default buttons, neutral pills */
+  --secondary-dark: #c7c7c7;
 
-  --bg: #f4f5f7;
+  --bg: #f4f4f4;
   --surface: #ffffff;
-  --border: #e2e4ea;
-  --text: #16181d;
-  --text-muted: #666d78;
+  --border: #dcdcdc;
+  --text: #1e1e1e;
+  --text-muted: #6b6b6b;
 
   --danger: #cf3b2b;
   --danger-bg: #fdecea;
@@ -144,8 +145,8 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -0.01em; }
 
 /* Buttons */
 .btn {
-  border: 1px solid var(--border);
-  background: var(--surface);
+  border: 1px solid var(--secondary-dark);
+  background: var(--secondary);
   color: var(--text);
   padding: 8px 13px;
   border-radius: var(--radius);
@@ -155,7 +156,7 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -0.01em; }
   min-height: 38px;
   line-height: 1.2;
 }
-.btn:hover { background: var(--bg); }
+.btn:hover { background: var(--secondary-dark); }
 .btn-primary { background: var(--ink); color: white; border-color: var(--ink); }
 .btn-primary:hover { background: var(--ink-hover); }
 .btn-ghost { background: transparent; border-color: rgba(255,255,255,0.25); color: #fff; }
@@ -165,7 +166,7 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -0.01em; }
 .btn-danger:hover { background: #a92e21; }
 .btn-block { width: 100%; }
 .btn-accent { background: var(--accent-soft); color: var(--accent-dark); border-color: var(--accent-soft); }
-.btn-accent:hover { background: #ffe4cc; }
+.btn-accent:hover { background: #fbdccb; }
 
 .menu { position: relative; }
 .menu-dropdown {
@@ -283,7 +284,7 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -0.01em; }
 }
 .column[open] .chevron { transform: rotate(45deg); }
 .column-count {
-  background: var(--bg);
+  background: var(--secondary);
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 700;
@@ -329,10 +330,10 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -0.01em; }
   font-weight: 700;
   padding: 3px 8px;
   border-radius: 999px;
-  background: var(--bg);
+  background: var(--secondary);
   color: var(--text-muted);
 }
-.pill-owner { background: #eef0f4; color: var(--ink); }
+.pill-owner { background: var(--secondary-dark); color: var(--ink); }
 .pill-unowned { background: var(--danger-bg); color: var(--danger); }
 .pill-due-today { background: var(--warn-bg); color: var(--warn); }
 .pill-overdue { background: var(--danger-bg); color: var(--danger); }
